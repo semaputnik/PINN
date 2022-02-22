@@ -50,8 +50,8 @@ def _draw_results(source_data, predicted_data, simulated_data, path, i, save=Fal
     ax.set_facecolor('xkcd:white')
 
     ax.scatter(source_data.index, source_data["I"], c='red', marker="*", label='Infected')
-    ax.plot(source_data.index, predicted_data["I"], 'green', alpha=0.9, lw=2, label='Infected Prediction', linestyle='dashed')
-    #ax.plot(source_data.index, simulated_data["I"]*N, 'blue', alpha=0.9, lw=2, label='Infected Simulated', linestyle='dashed')
+    #ax.plot(source_data.index, predicted_data["I"], 'green', alpha=0.9, lw=2, label='Infected Prediction', linestyle='dashed')
+    ax.plot(source_data.index, simulated_data["I"]*N, 'blue', alpha=0.9, lw=2, label='Infected Simulated', linestyle='dashed')
 
     ax.set_xlabel('Day', fontsize=20)
     ax.set_ylabel('Number', fontsize=20)
@@ -93,7 +93,7 @@ def ode(y, t, contact_rate, infective, incubation):
 
 N = 5e6
 
-NUM_EPOCHS = 50000
+NUM_EPOCHS = 100000
 
 LOSS_DRAW_START = 2500
 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
         logging.info("Training ends")
 
         logging.info(
-            f"(Alpha, Beta, Gamma): {round(pinn.beta.item(), 4), round(pinn.gamma.item(), 4), round(pinn.delta.item(), 4)}")
+            f"(Alpha, Beta, Gamma): {round(pinn.contact_rate.item(), 4), round(pinn.incubation_rate.item(), 4), round(pinn.infective_rate.item(), 4)}")
 
         _draw_loss(pinn.losses[LOSS_DRAW_START:], path_for_run, i, True)
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         y0 = source_data["S"][0], source_data["E"][0], source_data["I"][0], source_data["R"][0]
         t = np.linspace(0, len(source_data), len(source_data))
 
-        res = odeint(ode, y0, t, args=(pinn.beta.item(), pinn.delta.item(), pinn.gamma.item()))
+        res = odeint(ode, y0, t, args=(pinn.contact_rate.item(), pinn.infective_rate.item(), pinn.incubation_rate.item()))
         simulated = pd.DataFrame(res, columns=["S", "E", "I", "R"])
 
         _draw_results(source_data, predicted_data, simulated, path_for_run, i, True)

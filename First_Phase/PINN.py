@@ -15,8 +15,6 @@ class PINN(nn.Module):
         # population size
         self.N = N
 
-        self.N_array = torch.from_numpy(np.full(len(SEIR_data[1]), 1.0)).float()
-
         self.t = torch.tensor(t, requires_grad=True)
         self.t_float = self.t.float()
         self.t_batch = torch.reshape(self.t_float, (len(self.t), 1))
@@ -30,9 +28,9 @@ class PINN(nn.Module):
         self.losses = []
 
         # setting the parameters
-        self.beta_tilda = torch.nn.Parameter(torch.rand(1, requires_grad=True))
-        self.gamma_tilda = torch.nn.Parameter(torch.rand(1, requires_grad=True))
-        self.delta_tilda = torch.nn.Parameter(torch.rand(1, requires_grad=True))
+        self.contact_rate_tilda = torch.nn.Parameter(torch.tensor(1.0, requires_grad=True))
+        self.incubation_rate_tilda = torch.nn.Parameter(torch.tensor(0.05, requires_grad=True))
+        self.infective_rate_tilda = torch.nn.Parameter(torch.tensor(1.0, requires_grad=True))
 
         # find values for normalization
         self.S_max = max(self.S)
@@ -63,22 +61,22 @@ class PINN(nn.Module):
         # NN
         self.net_u = self.Neural_net()
         self.params = list(self.net_u.parameters())
-        self.params.extend(list([self.beta_tilda, self.gamma_tilda, self.delta_tilda]))
+        self.params.extend(list([self.contact_rate_tilda, self.incubation_rate_tilda, self.infective_rate_tilda]))
 
         self.lossF_history = []
         self.lossU_history = []
 
     @property
-    def beta(self):
-        return torch.tanh(self.beta_tilda)*5 + 2.5
+    def contact_rate(self):
+        return torch.tanh(self.contact_rate_tilda) * 0.5 + 1  # 0.5 - 1.5
 
     @property
-    def gamma(self):
-        return torch.tanh(self.gamma_tilda)*5 + 2.5
+    def incubation_rate(self):
+        return torch.tanh(self.incubation_rate_tilda) * 0.25 + 0.25
 
     @property
-    def delta(self):
-        return torch.tanh(self.delta_tilda)*5 + 2.5
+    def infective_rate(self):
+        return torch.tanh(self.infective_rate_tilda) * 0.5 + 0.5
 
     class Neural_net(nn.Module):
         def __init__(self):
@@ -138,15 +136,14 @@ class PINN(nn.Module):
         I = self.I_min + (self.I_max - self.I_min) * I_hat
         R = self.R_min + (self.R_max - self.R_min) * R_hat
 
-        # logging.info(f"S_hat_t: {torch.mean(S_hat_t).item()}")
-        # logging.info(f"b: {b}")
-        # logging.info(f"S: {torch.mean(S).item()}")
-        # logging.info(f"I: {torch.mean(I).item()}")
+        alpha = 1 / self.incubation_rate
+        gamma = 1 / self.infective_rate
+        beta = gamma * self.contact_rate / self.N
 
-        f1_hat = S_hat_t - (-self.beta * S * I / self.N) / (self.S_max - self.S_min)
-        f2_hat = E_hat_t - ((-self.beta * S * I / self.N) - (self.gamma * E)) / (self.E_max - self.E_min)
-        f3_hat = I_hat_t - (self.gamma * E - self.delta * I) / (self.I_max - self.I_min)
-        f4_hat = R_hat_t - (self.delta * I) / (self.R_max - self.R_min)
+        f1_hat = S_hat_t - (-beta * S * I) / (self.S_max - self.S_min)
+        f2_hat = E_hat_t - ((beta * S * I) - (alpha * E)) / (self.E_max - self.E_min)
+        f3_hat = I_hat_t - (alpha * E - gamma * I) / (self.I_max - self.I_min)
+        f4_hat = R_hat_t - (gamma * I) / (self.R_max - self.R_min)
 
         return [f1_hat, f2_hat, f3_hat, f4_hat]
 
@@ -190,36 +187,26 @@ class PINN(nn.Module):
             I_pred_list.append(self.I_min + (self.I_max - self.I_min) * I_pred)
             R_pred_list.append(self.R_min + (self.R_max - self.R_min) * R_pred)
 
-            loss = (torch.mean(torch.square(self.S_hat - S_pred)) +
-                    torch.mean(torch.square(self.I_hat - I_pred)) +
-                    torch.mean(torch.square(self.E_hat - E_pred)) +
-                    torch.mean(torch.square(self.R_hat - R_pred)) +
-                    torch.mean(torch.square(f_residuals[0])) +
-                    torch.mean(torch.square(f_residuals[1])) +
-                    torch.mean(torch.square(f_residuals[2])) +
-                    torch.mean(torch.square(f_residuals[3]))
-                    )
-
-            #lossU = self.lossU(seir_hat)
-            #lossF, l_ar = self.lossF(f_residuals)
+            lossU = self.lossU(seir_hat)
+            lossF, l_ar = self.lossF(f_residuals)
 
             # calculate the loss
-            #loss = (lossU + lossF)
+            loss = (lossU + lossF)
 
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
 
-            #self.lossF_history.append(lossF)
-            #self.lossU_history.append(lossU)
+            self.lossF_history.append(lossF)
+            self.lossU_history.append(lossU)
             self.losses.append(loss.item())
 
             if epoch % 100 == 0:
                 logging.info(
-                    f'Epoch {epoch}: (Beta, Gamma, Delta) = '
-                    + f'({round(self.beta.item(), 4)}, {round(self.gamma.item(), 4)}, {round(self.delta.item(), 4)})')
-                #logging.info(f"Loss: {loss.item()}, LossU: {lossU}, LossF: {lossF}, F_ar:{l_ar}")
-                logging.info(f"Loss: {loss.item()}")
+                    f'Epoch {epoch}: (Contact_rate = 1.09, Incubation_rate = 0.02, Infective_rate = 0.73) = '
+                    + f'({round(self.contact_rate.item(), 4)}, {round(self.incubation_rate.item(), 4)}, {round(self.infective_rate.item(), 4)})')
+                logging.info(f"Loss: {loss.item()}, LossU: {lossU}, LossF: {lossF}, loss_Fs:{l_ar}")
+                #logging.info(f"Loss: {loss.item()}")
 
-        return pd.DataFrame({"E": E_pred_list[0].detach().numpy(),
-                             "I": I_pred_list[0].detach().numpy(), "R": R_pred_list[0].detach().numpy()})
+        return pd.DataFrame({"E": E_pred_list[0].detach().numpy(), "I": I_pred_list[0].detach().numpy(),
+                             "R": R_pred_list[0].detach().numpy()})
