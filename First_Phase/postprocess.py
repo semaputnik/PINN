@@ -3,9 +3,8 @@ from pandas import DataFrame
 import matplotlib.pyplot as plt
 import sklearn.metrics as m
 
-
 if __name__ == "__main__":
-    path_for_run = "runs/1644157987"
+    path_for_run = "runs/1644198028"
 
     predicted_data_path = f"{path_for_run}/predicted_data.csv"
     source_data_path = f"{path_for_run}/source_data.csv"
@@ -23,20 +22,23 @@ if __name__ == "__main__":
     ax = fig.add_subplot(111, facecolor='#dddddd', axisbelow=True)
     ax.set_facecolor('xkcd:white')
 
-    #ax.plot(source_data.index, source_data["S"], 'pink', alpha=0.5, lw=2, label='Susceptible')
-    #ax.plot(source_data.index, predicted_data["S"], 'red', alpha=0.9, lw=2, label='Susceptible Prediction', linestyle='dashed')
+    # ax.plot(source_data.index, source_data["S"], 'pink', alpha=0.5, lw=2, label='Susceptible')
+    # ax.plot(source_data.index, predicted_data["S"], 'red', alpha=0.9, lw=2, label='Susceptible Prediction', linestyle='dashed')
 
-    ax.plot(source_data.index, source_data["E"], 'red', alpha=0.5, lw=2, label='Exposed')
+    ax.plot(source_data.index[:115], source_data["E"][:115], 'red', alpha=0.5, lw=2, label='Exposed')
+    ax.plot(source_data.index[114:], source_data["E"][114:], 'gold', alpha=0.5, lw=2, label='Future Exposed')
     ax.plot(source_data.index, predicted_data["E"], 'coral', alpha=0.9, lw=2,
-            label='Exposed Prediction (R^2 : {})'.format(r2_E), linestyle='dashed')
+            label='Exposed Prediction', linestyle='dashed')
 
-    ax.plot(source_data.index, source_data["I"], 'darkgreen', alpha=0.5, lw=2, label='Infected')
+    ax.plot(source_data.index[:115], source_data["I"][:115], 'darkgreen', alpha=0.5, lw=2, label='Infected')
+    ax.plot(source_data.index[114:], source_data["I"][114:], 'gold', alpha=0.5, lw=2, label='Future Infected')
     ax.plot(source_data.index, predicted_data["I"], 'green', alpha=0.9, lw=2,
-            label='Infected Prediction (R^2 : {})'.format(r2_I), linestyle='dashed')
+            label='Infected Prediction', linestyle='dashed')
 
-    ax.plot(source_data.index, source_data["R"], 'darkblue', alpha=0.5, lw=2, label='Recovered')
+    ax.plot(source_data.index[:115], source_data["R"][:115], 'darkblue', alpha=0.5, lw=2, label='Recovered')
+    ax.plot(source_data.index[114:], source_data["R"][114:], 'gold', alpha=0.5, lw=2, label='Future Recovered')
     ax.plot(source_data.index, predicted_data["R"], 'blue', alpha=0.9, lw=2,
-            label='Recovered Prediction (R^2 : {})'.format(r2_R), linestyle='dashed')
+            label='Recovered Prediction', linestyle='dashed')
 
     ax.set_xlabel('Day', fontsize=20)
     ax.set_ylabel('Number', fontsize=20)
@@ -50,13 +52,12 @@ if __name__ == "__main__":
 
     plt.savefig(path_for_run + "/train_result.png")
 
-    print('MSE(S): ', round(m.mean_squared_error(source_data["S"], predicted_data["S"]), 4))
-    print('MSE(E): ', round(m.mean_squared_error(source_data["E"], predicted_data["E"]), 4))
-    print('MSE(I): ', round(m.mean_squared_error(source_data["I"], predicted_data["I"]), 4))
-    print('MSE(R): ', round(m.mean_squared_error(source_data["R"], predicted_data["R"]), 4))
+    r2_score = round(m.r2_score(source_data[["E", "I", "R"]][:115], predicted_data[["E", "I", "R"]][:115]), 4)
 
-    print('R^2(S): ', r2_S)
-    print('R^2(E): ', r2_E)
-    print('R^2(I): ', r2_I)
-    print('R^2(R): ', r2_R)
+    print('R^2: ', r2_score)
 
+    n = len(predicted_data)
+
+    adj_r2 = 1 - ((1-r2_score)*(n-1)/(n-5-1))
+
+    print('Adjusted R^2: ', adj_r2)

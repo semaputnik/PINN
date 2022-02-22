@@ -4,34 +4,10 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-# population size
-N = 59e6
-
-S0 = N - 3
-E0 = 3
-I0 = 0
-R0 = 0
-
-# A grid of time points (in days)
-t = np.linspace(0, 500, 100)
-
-# the probability of disease transmission per contact times the number of contacts per unit time
-alpha = 0.28
-
-# the rate of progression from exposure to infectious. It is the reciprocal of the incubation period
-beta = 0.191
-
-# the recovery rate. It is the inverse of the infectious period
-gamma = 0.05
-
-def ode(y, t, alpha, beta, gamma):
-    S, E, I, R = y
-    dSdt = - (alpha / N) * S * I
-    dEdt = (alpha / N) * S * I - beta * E
-    dIdt = beta * E - gamma * I
-    dRdt = gamma * I
-
-    return dSdt, dEdt, dIdt, dRdt
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
 
 
 def draw(df):
@@ -39,10 +15,9 @@ def draw(df):
     ax = fig.add_subplot(111, facecolor='#dddddd', axisbelow=True)
     ax.set_facecolor('xkcd:white')
 
-    ax.plot(df["t"], df["S"], 'violet', alpha=0.5, lw=2, label='Susceptible', linestyle='dashed')
-    ax.plot(df["t"], df["E"], 'darkgreen', alpha=0.5, lw=2, label='Exposed', linestyle='dashed')
-    ax.plot(df["t"], df["I"], 'blue', alpha=0.5, lw=2, label='Infected', linestyle='dashed')
-    ax.plot(df["t"], df["R"], 'red', alpha=0.5, lw=2, label='Recovered', linestyle='dashed')
+    ax.plot(df.index, df["E"], 'darkgreen', alpha=0.5, lw=2, label='Exposed', linestyle='dashed')
+    ax.plot(df.index, df["I"], 'blue', alpha=0.5, lw=2, label='Infected', linestyle='dashed')
+    ax.plot(df.index, df["R"], 'red', alpha=0.5, lw=2, label='Recovered', linestyle='dashed')
 
     ax.set_xlabel('Time /days')
     ax.set_ylabel('Number')
@@ -67,15 +42,22 @@ def save(df, path):
     df.to_csv(path)
 
 
+N = 5e6
+
+
 if __name__ == "__main__":
-    # Initial conditions
-    y0 = S0, E0, I0, R0
+    data = pd.read_csv('data/spb.combined.daily.txt', '\t', index_col=['TIME'], parse_dates=['TIME'], encoding='cp1251')[2:]
+    data.drop(['HOSPITALIZED.today', 'DEATHS', 'Yandex.ACTIVITY.points', 'v1.CS', 'v2.CS', 'CONFIRMED.spb', 'PCR.tested'], axis=1, inplace=True)
+    data.fillna(0, inplace=True)
 
-    ret = odeint(ode, y0, t, args=(alpha, beta, gamma))
-    data = pd.DataFrame(ret, columns=["S", "E", "I", "R"])
-    data["t"] = t
+    df = pd.DataFrame()
+    df["E"] = data["CONFIRMED"]
+    df["I"] = data["ACTIVE"]
+    df["R"] = data["RECOVERED"]
+    df["S"] = N - df["I"] - df["E"] - df["R"]
+    df["t"] = np.arange(0.0, len(df), 1)
 
-    draw(data)
+    draw(df)
 
     # save to csv file
-    save(data, "data/covid_data.csv")
+    save(df[:120], "data/covid_data.csv")
